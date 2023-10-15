@@ -6,15 +6,16 @@ struct SuffixArray { // https://cp-algorithms.com/string/suffix-array.html
   vector < size_type > p;
   vector < vector < size_type > > C;
   SuffixArray(const V & s,
-	const size_type alphabet = static_cast<size_type>(1) << (8*sizeof(typename V::value_type))) {
+	const size_type alphabet = static_cast<size_type>(1) << (8*sizeof(typename V::value_type)),
+	const typename V::value_type minc = 0) {
     n = s.size();
     static_assert(sizeof(typename V::value_type) < sizeof(size_type));
     vector < size_type > cnt(max(alphabet, n), 0), c(n);
     p.resize(n);
     // counter sort array p, O(n)
-    for (size_type i = 0; i < n; i++) cnt[s[i]]++;
+    for (size_type i = 0; i < n; i++) cnt[s[i] - minc]++;
     for (size_type i = 1; i < alphabet; i++) cnt[i] += cnt[i - 1];
-    for (size_type i = 0; i < n; i++) p[--cnt[s[i]]] = i;
+    for (size_type i = 0; i < n; i++) p[--cnt[s[i] - minc]] = i;
     c[p[0]] = 0;
     size_type classes = 1;
     for (size_type i = 1; i < n; i++) {
