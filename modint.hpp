@@ -27,7 +27,7 @@ class ModInt {
     }
     public:
     ModInt(const ModInt other):val(other.val) {}
-    ModInt(const Int val):val(val) {}
+    explicit ModInt(const Int val):val(val) {}
     ModInt():val() {}
     static ModInt reduce(const Int val) {
 	return val % modulo;
@@ -40,23 +40,30 @@ class ModInt {
             val -= modulo;
         return *this;
     }
-    auto operator -= (const ModInt other) {
+    auto &operator -= (const ModInt other) {
         if (val < other.val)
             val = val + modulo - other.val;
         else
             val = val - other.val;
         return *this;
     }
+    friend auto operator + (ModInt a, ModInt b) { return a += b; }
+    friend auto operator - (ModInt a, ModInt b) { return a -= b; }
+    auto operator - () { // unary minus
+	return ModInt(val == 0 ? val : modulo - val);
+    }
+    auto operator + () { // unary plus
+	return *this;
+    }
     auto &operator *= (const ModInt other) {
         typename DoublePrec<Int>::double_type temp = val;
         temp *= other.val;
-        val = static_cast<Int>(temp % modulo);
-	return *this;
+	return *this = reduce(temp);
     }
     auto operator * (const ModInt other) {
         typename DoublePrec<Int>::double_type temp = val;
         temp *= other.val;
-        return ModInt(static_cast<Int>(temp % modulo));
+        return reduce(temp);
     }
 
     template <typename AnyInt>
