@@ -1,10 +1,10 @@
-#ifndef MERGE_UNIQUE_HPP
-#define MERGE_UNIQUE_HPP
+#ifndef LIST_SET_UNION_HPP
+#define LIST_SET_UNION_HPP
 #include <functional>
 #include <forward_list>
 #if 0
 template <typename ...L>
-static void merge_unique(std::forward_list<L...> &a, std::forward_list<L...> & b) {
+static void set_union(std::forward_list<L...> &a, std::forward_list<L...> & b) {
     if (b.empty())
 	return;
     if (a.empty()) {
@@ -38,7 +38,7 @@ static void merge_unique(std::forward_list<L...> &a, std::forward_list<L...> & b
 }
 #endif
 template <typename ...L, typename Compare = std::less<>>
-static void merge_unique(std::forward_list<L...> &a, std::forward_list<L...> & b, Compare comp = std::less<>()) {
+static void set_union(std::forward_list<L...> &a, std::forward_list<L...> & b, Compare comp = std::less<>()) {
     if (b.empty())
 	return;
     if (a.empty()) {
@@ -73,7 +73,7 @@ static void merge_unique(std::forward_list<L...> &a, std::forward_list<L...> & b
 #include <list>
 #if 0
 template <typename ...L>
-static void merge_unique(std::list<L...> &a, std::list<L...> & b) {
+static void set_union(std::list<L...> &a, std::list<L...> & b) {
     if (b.empty())
 	return;
     if (a.empty()) {
@@ -101,7 +101,7 @@ static void merge_unique(std::list<L...> &a, std::list<L...> & b) {
 }
 #endif
 template <typename ...L, typename Compare = std::less<>>
-static void merge_unique(std::list<L...> &a, std::list<L...> & b, Compare comp = std::less<>()) {
+static void set_union(std::list<L...> &a, std::list<L...> & b, Compare comp = std::less<>()) {
     if (b.empty())
 	return;
     if (a.empty()) {
