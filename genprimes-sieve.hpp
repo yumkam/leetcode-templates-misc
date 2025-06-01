@@ -1,39 +1,11 @@
-#include <iostream>
+//#include <iostream>
 #ifndef GENPRIMES_SIEVE_HPP
 #define GENPRIMES_SIEVE_HPP 1
 #include <algorithm>
-#include <limits>
 #include <vector>
-#include <cmath>
+#include <numeric>
 #include <cassert>
-template<typename T>
-static T floor_isqrt(T v) {
-    T lo = 0;
-    static const T limit = std::floor(std::sqrt(static_cast<long double>(std::numeric_limits<T>::max())));
-    T hi = std::min(static_cast<T>(v/2 + (v&1)), limit);
-    while(lo < hi) {
-        T mid = lo + (hi - lo)/2 + ((hi - lo) & 1);
-        if (mid*mid > v)
-            hi = mid - 1;
-        else
-            lo = mid;
-    }
-    return lo;
-}
-template<typename T>
-static T ceil_isqrt(T v) {
-    T lo = 0;
-    static const T limit = std::ceil(std::sqrt(static_cast<long double>(std::numeric_limits<T>::max())));
-    T hi = std::min(static_cast<T>(v/2 + 1), limit);
-    while(lo < hi) {
-        T mid = lo + (hi - lo)/2;
-        if (mid*mid < v)
-            lo = mid + 1;
-        else
-            hi = mid;
-    }
-    return lo;
-}
+#include "isqrt.hpp"
 // generate primes up to maxv
 template<typename T>
 static std::vector<T> genprimes(T maxv, T segsize) {
@@ -59,7 +31,7 @@ static std::vector<T> genprimes(T maxv, T segsize) {
     if (maxv >= 2)
         primes.push_back(2);
     // regular sieve for first segment
-    for (T n = 3, nsq = n*n, i = 0; i < segsize; ++i, nsq += 4*n + 4, n += 2)
+    for (T n = 3, nsq = n*n, i = 0, l = 2*segsize + 3; nsq < l; ++i, nsq += 4*n + 4, n += 2)
         if (!segment[i])
             for (T j = (nsq - 3)/2; j < segsize; j += n)
                 segment[j] = true;
@@ -117,12 +89,14 @@ static std::vector<T> genprimes_simple(T maxv) {
     // time complexity = O(n log log n)
     // space complexity = O(n) [bits]
     // result size = O(n/ln n)
-    const T segsize = (std::max<T>(maxv, 3) - 3)/2 + 1;
-    std::vector<bool> segment(segsize);
     std::vector<T> primes;
     if (maxv >= 2)
         primes.push_back(2);
-    for (T n = 3, nsq = n*n, i = 0; i < segsize; ++i, nsq += 4*n + 4, n += 2)
+    if (maxv < 3)
+        return primes;
+    const T segsize = (maxv - 3)/2 + 1;
+    std::vector<bool> segment(segsize);
+    for (T n = 3, nsq = n*n, i = 0; nsq <= maxv; ++i, nsq += 4*n + 4, n += 2)
         if (!segment[i])
             for (T j = (nsq - 3)/2; j < segsize; j += n)
                 segment[j] = true;
@@ -130,5 +104,91 @@ static std::vector<T> genprimes_simple(T maxv) {
         if (!segment[i])
             primes.push_back(2*i + 3);
     return primes;
+}
+template<typename T>
+static std::vector<T> genprimes_simple3(T maxv) {
+    // time complexity = O(n log log n)
+    // space complexity = O(n) [bits]
+    // result size = O(n/ln n)
+    const T segsize = (maxv + 2)/3;
+    std::vector<bool> segment(segsize);
+    std::vector<T> primes;
+    if (maxv >= 2)
+        primes.push_back(2);
+    if (maxv >= 3)
+        primes.push_back(3);
+    for (T i = 1, i6 = 6, iq3 = 3, k = 5, kq = k*k;; iq3 += i6 + 3, i6 += 6) {
+        if (kq > maxv)
+            break;
+        if (!segment[i]) {
+            for (T j = iq3 + (i<<(1 + (i & 1))) + (i & 1); j < segsize; j += 2*k)
+                segment[j] = true;
+            for (T j = iq3 + i6 + (i & 1) + 1; j < segsize; j += 2*k)
+                segment[j] = true;
+        }
+        ++i;
+        kq += (k + 1 + (i & 1))<<(2 + (i & 1));
+        k += 2<<(i & 1);
+    }
+    for (T i = 1, k = 4; (k | 1) <= maxv; ++i, k += 3)
+        if (!segment[i])
+            primes.push_back((k | 1));
+    return primes;
+}
+// return lpd, where lpd[i] is index of least prime divisor of i*2 + 3 (equal to i if it is prime)
+// (for even numbers, least prime divisor is always 2)
+template<typename T>
+static std::vector<T> gen_least_prime_divisors_simple2(T maxv) {
+    // time complexity = O(n log log n)
+    // result size = O(n)
+    const T segsize = (std::max<T>(maxv, 3) - 3)/2 + 1;
+    std::vector<T> segment(segsize);
+    std::iota(segment.begin(), segment.end(), (T)0);
+    for (T n = 3, nsq = n*n, i = 0; nsq <= maxv; ++i, nsq += 4*n + 4, n += 2)
+        if (segment[i] == i) {
+            for (T j = (nsq - 3)/2; j < segsize; j += n)
+                if (auto &sj = segment[j]; sj == j)
+                    sj = i;
+        }
+    return segment;
+}
+// return lpd, where
+//      lpd[i] < i: if 2*i + 3 is not a prime, index of least prime divisor
+//      lpd[i] > i: if 2*i + 3 is a prime, index of next prime
+//      lpd[i] = i: if 2*i + 3 is the last prime in segment
+template<typename T>
+static std::vector<T> gen_least_prime_divisors_list_simple2(T maxv) {
+    // time complexity = O(n log log n)
+    // result size = O(n)
+    const T segsize = (std::max<T>(maxv, 3) - 3)/2 + 1;
+    std::vector<T> segment(segsize);
+    std::iota(segment.begin(), segment.end(), (T)0);
+    unsigned last = 0;
+    for (T n = 3, nsq = n*n, i = 0; nsq <= maxv; ++i, nsq += 4*n + 4, n += 2)
+        if (segment[i] == i) {
+            segment[last] = i;
+            last = i;
+            for (T j = (nsq - 3)/2; j < segsize; j += n)
+                if (auto &sj = segment[j]; sj == j)
+                    sj = i;
+        }
+    return segment;
+}
+// return lpd, where lpd[i] is largest prime divisor of i*2 + 3 non-exceeding sqrt(i*2 + 3)
+// (equal to i*2 + 3 if it is prime)
+template<typename T>
+static std::vector<T> gen_prime_divisors_simple2(T maxv) {
+    // time complexity = O(n log log n)
+    // result size = O(n)
+    const T segsize = (std::max<T>(maxv, 3) - 3)/2 + 1;
+    std::vector<T> segment(segsize);
+    for (T i = 0, n = 3; i < segsize; ++i, n += 2)
+        segment[i] = n;
+    for (T i = 0, n = 3, nsq = n*n; nsq <= maxv; ++i, nsq += 4*n + 4, n += 2)
+        if (segment[i] == n) {
+            for (T j = (nsq - 3)/2; j < segsize; j += n)
+                segment[j] = n;
+        }
+    return segment;
 }
 #endif // GENPRIMES_SIEVE_HPP
