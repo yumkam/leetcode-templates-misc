@@ -12,7 +12,7 @@ class FenwickTree {
     typedef typename V::size_type size_type;
     typedef typename V::value_type value_type;
     private:
-    static const size_type LSB(const size_type i) {
+    static constexpr size_type LSB(const size_type i) {
         return i & -i;
     }
 
@@ -53,13 +53,13 @@ class FenwickTree {
         init(this->A);
         return *this;
     }
-    
+
     FenwickTree &operator = (V && A) {
         this->A = std::move(A);
         init(this->A);
         return *this;
     }
-    
+
     FenwickTree &operator = (const FenwickTree &) = default;   
     FenwickTree &operator = (FenwickTree &&) = default;
 
@@ -107,34 +107,34 @@ class FenwickTree {
             sum -= A[i];
         return sum;
     }
-    
+
     //
     T get(size_type i) const {
         return i == 0 ? A[0] : range_sum(i - 1, i);
     }
-    
+
     //
     void set(size_type i, T v) {
-	v -= get(i);
+        v -= get(i);
         add(i, v);
     }
-    
+
     template <class... Args>
-    void emplace_back(Args&&...args) {
-        auto cidx = A.size();
-        auto &back = A.emplace_back(forward<Args>(args)...);
-        if (!cidx)
-            return;
-        for (auto j = cidx - 1; j + LSB(j) == cidx; j -= LSB(j))
-            back += A[j];
-    }
+        void emplace_back(Args&&...args) {
+            auto cidx = A.size();
+            auto &back = A.emplace_back(forward<Args>(args)...);
+            if (!cidx)
+                return;
+            for (auto j = cidx - 1; j + LSB(j) == cidx; j -= LSB(j))
+                back += A[j];
+        }
     void push_back(T&&x) {
         return emplace_back(std::move(x));
     }
     void push_back(const T& x) {
         return emplace_back(x);
     }
-    
+
     void pop_back() {
         A.pop_back();
     }
@@ -152,15 +152,15 @@ class FenwickTree {
     }
     public:
     template <class Iterator>
-    void append(Iterator begin, Iterator end) {
-        auto osize = A.size();
-        for (; begin != end; ++begin)
-            A.push_back(*begin);
-        adjust_size(osize);
-    }
+        void append(Iterator begin, Iterator end) {
+            auto osize = A.size();
+            for (; begin != end; ++begin)
+                A.push_back(*begin);
+            adjust_size(osize);
+        }
 
     void reserve(size_type size) {
-	A.reserve(size);
+        A.reserve(size);
     }
 
     void resize(size_type size) {
@@ -188,13 +188,13 @@ class FenwickTree {
         auto s = A[0];
         if (value < s)
             return 0;
-	size_type res = 0;
+        size_type res = 0;
         for (; j > 0; j >>= 1)
-	    if (auto p = res + j; p < i)
-		if (auto t = s; !(value < (t += A[k]))) {
-		    s = t;
-		    res = p;
-		    }
+            if (auto p = res + j; p < i)
+                if (auto t = s; !(value < (t += A[p]))) {
+                    s = t;
+                    res = p;
+                }
         return res + 1;
     }
     size_type upper_bound(T value, size_type i) const {
@@ -204,7 +204,7 @@ class FenwickTree {
         return upper_bound(value, i, j);
     }
     size_type upper_bound(T value) const {
-	return upper_bound(value, size());
+        return upper_bound(value, size());
     }
 
     // Find the minimum idx (i <= idx < min(A.size(), (j<<1)) with prefix_sum(idx) >= value.
@@ -215,13 +215,13 @@ class FenwickTree {
         auto s = A[0];
         if (!(s < value))
             return 0;
-	size_type res = 0;
+        size_type res = 0;
         for (; j > 0; j >>= 1)
-	    if (auto p = res + j; p < i)
-		if (auto t = s; (t += A[k]) < value) {
-		    s = t;
-		    res = p;
-		}
+            if (auto p = res + j; p < i)
+                if (auto t = s; (t += A[p]) < value) {
+                    s = t;
+                    res = p;
+                }
         return res + 1;
     }
     size_type lower_bound(T value, size_type i) const {
@@ -233,9 +233,9 @@ class FenwickTree {
     size_type lower_bound(T value) const {
         return lower_bound(value, size());
     }
-    
+
     constexpr size_type size() const { return A.size(); }
-    
+
     constexpr bool empty() const { return A.empty(); }
 
     private:
@@ -251,14 +251,14 @@ class FenwickTree {
             f.set(index, v);
             return *this;
         }
-	FenwickReference &operator +=(T v) {
-	    f.add(index, v);
-	    return *this;
-	}
-	FenwickReference &operator -=(T v) {
-	    f.add(index, -v); // XXX possible signed overflow if (v < 0 && v == numeric_limits<T>::min())
-	    return *this;
-	}
+        FenwickReference &operator +=(T v) {
+            f.add(index, v);
+            return *this;
+        }
+        FenwickReference &operator -=(T v) {
+            f.add(index, -v); // XXX possible signed overflow if (v < 0 && v == numeric_limits<T>::min())
+            return *this;
+        }
         FenwickReference &operator = (const FenwickReference &fr) {
             return *this = T(fr);
         }
@@ -275,72 +275,74 @@ class FenwickTree {
 };
 namespace V1 {
     template <typename T, typename V = std::vector<T>>
-    class FenwickTreeRangeUpdateRangeQuery {
-	// T is expected to support 'a += b', 'a -= b', 'a + b', 'a - b', 'a * b', '-a', a cast from size_type
-	FenwickTree<T, V> t1;
-	FenwickTree<T, V> t2;
-	public:
-	typedef typename V::size_type size_type;
-	typedef typename V::value_type value_type;
-	FenwickTreeRangeUpdateRangeQuery(size_type size):t1(size), t2(size) {}
-	FenwickTreeRangeUpdateRangeQuery(const FenwickTreeRangeUpdateRangeQuery &) = default;
-	FenwickTreeRangeUpdateRangeQuery(FenwickTreeRangeUpdateRangeQuery &&) = default;
-	auto size() const { return t1.size(); }
-	// adds val to nums[l] ... nums[r]
-	void add_range(size_type l, size_t r, const value_type&val) {
-	    const auto n = size();
-	    t1.add(l, val);
-	    t2.add(l, val*static_cast<value_type>(l) - val);
-	    if (r + 1 != size) {
-		t1.add(r + 1, -val);
-		t2.add(r + 1, -val*static_cast<value_type>(r));
-	    }
-	}
-	// return 
-	value_type prefix_sum(size_t i) {
-	    return t1.prefix_sum(i)*static_cast<value_type>(i) - t2.prefix_sum(i);
-	}
-	// Returns sum of nums[i + 1] to nums[j].
-	// Same as prefix_sum(j) - prefix_sum(i), but a bit faster
-	value_type range_sum(size_t l, size_t r) {
-	    return t1.sum(r)*static_cast<value_type>(r) - t1.prefix_sum(l)*static_cast<value_type>(l) - t2.range_sum(l, r);
-	}
-    };
+        class FenwickTreeRangeUpdateRangeQuery {
+            // T is expected to support 'a += b', 'a -= b', 'a + b', 'a - b', 'a * b', '-a', a cast from size_type
+            FenwickTree<T, V> t1;
+            FenwickTree<T, V> t2;
+            public:
+            typedef typename V::size_type size_type;
+            typedef typename V::value_type value_type;
+            FenwickTreeRangeUpdateRangeQuery(size_type size):t1(size), t2(size) {}
+            FenwickTreeRangeUpdateRangeQuery(const FenwickTreeRangeUpdateRangeQuery &) = default;
+            FenwickTreeRangeUpdateRangeQuery(FenwickTreeRangeUpdateRangeQuery &&) = default;
+            auto size() const { return t1.size(); }
+            // adds val to nums[l] ... nums[r]
+            void add_range(size_type l, size_t r, const value_type&val) {
+                const auto n = size();
+                t1.add(l, val);
+                t2.add(l, val*static_cast<value_type>(l) - val);
+                if (r + 1 != size) {
+                    t1.add(r + 1, -val);
+                    t2.add(r + 1, -val*static_cast<value_type>(r));
+                }
+            }
+            // return 
+            value_type prefix_sum(size_t i) {
+                return t1.prefix_sum(i)*static_cast<value_type>(i) - t2.prefix_sum(i);
+            }
+            // Returns sum of nums[i + 1] to nums[j].
+            // Same as prefix_sum(j) - prefix_sum(i), but a bit faster
+            value_type range_sum(size_t l, size_t r) {
+                return t1.sum(r)*static_cast<value_type>(r) - t1.prefix_sum(l)*static_cast<value_type>(l) - t2.range_sum(l, r);
+            }
+        };
 } // V1
 namespace V2 {
     template <typename T>
-    class FenwickTreeRangeUpdateRangeQuery {
-	// T is expected to support 'a += b', 'a -= b', 'a + b', 'a - b', 'a * b', '-a', a cast from size_type
-	struct vpair {
-	    T v1;
-	    T v2;
-	    void operator += (const T& other) { v1 += other.v1; v2 += other.v2; }
-	    void operator -= (const T& other) { v1 -= other.v1; v2 -= other.v2; }
-	};
-	FenwickTree<vpair>> t;
-	public:
-	typedef decltype(t)::size_type size_type;
-	typedef T value_type;
-	FenwickTreeRangeUpdateRangeQuery(size_type size):t(size) {}
-	FenwickTreeRangeUpdateRangeQuery(const FenwickTreeRangeUpdateRangeQuery &) = default;
-	FenwickTreeRangeUpdateRangeQuery(FenwickTreeRangeUpdateRangeQuery &&) = default;
-	auto size() const { return t.size(); }
-	// adds val to nums[l] ... nums[r]
-	void add_range(size_type l, size_t r, const value_type&val) {
-	    const auto n = size();
-	    t.add(l, vpair{val, val*static_cast<value_type>(l) - val});
-	    if (r + 1 != size)
-		t.add(r + 1, vpair {-val, -val*static_cast<value_type>(r)});
-	}
-	value_type prefix_sum(size_t i) {
-	    auto vp = t.prefix_sum(i);
-	    return vp.v1*static_cast<value_type>(i) - vp.v2;
-	}
-	value_type range_sum(size l, size_r) {
-	    return prefix_sum(r) - prefix_sum(l);
-	}
-	void push_back(const value_type &val) {
-	    t.push_back(vpair {val, val*static_cast<value_type>(size()) - val });
-    };
+        class FenwickTreeRangeUpdateRangeQuery {
+            // T is expected to support 'a += b', 'a -= b', 'a + b', 'a - b', 'a * b', '-a', a cast from size_type
+            struct vpair {
+                T v1;
+                T v2;
+                void operator += (const T& other) { v1 += other.v1; v2 += other.v2; }
+                void operator -= (const T& other) { v1 -= other.v1; v2 -= other.v2; }
+            };
+            FenwickTree<vpair> t;
+            public:
+            typedef decltype(t)::size_type size_type;
+            typedef T value_type;
+            FenwickTreeRangeUpdateRangeQuery(size_type size):t(size) {}
+            FenwickTreeRangeUpdateRangeQuery(const FenwickTreeRangeUpdateRangeQuery &) = default;
+            FenwickTreeRangeUpdateRangeQuery(FenwickTreeRangeUpdateRangeQuery &&) = default;
+            auto size() const { return t.size(); }
+            // adds val to nums[l] ... nums[r]
+            void add_range(size_type l, size_t r, const value_type&val) {
+                const auto n = size();
+                t.add(l, vpair{val, val*static_cast<value_type>(l) - val});
+                if (r + 1 != size)
+                    t.add(r + 1, vpair {-val, -val*static_cast<value_type>(r)});
+            }
+            value_type prefix_sum(size_type i) {
+                auto vp = t.prefix_sum(i);
+                return vp.v1*static_cast<value_type>(i) - vp.v2;
+            }
+            value_type range_sum(size_type l, size_type r) {
+                return prefix_sum(r) - prefix_sum(l);
+            }
+            void push_back(const value_type &val) {
+                t.push_back(vpair {val, val*static_cast<value_type>(size()) - val });
+            }
+        };
 } // V2
 #endif
+// vim: sw=4 et
