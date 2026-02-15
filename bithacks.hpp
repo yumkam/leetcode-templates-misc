@@ -30,4 +30,10 @@ template <typename T>
 static auto floor_ilog2(T x) { return sizeof(x)*8 - 1 - clz(x); }
 template <typename T>
 static auto ceil_ilog2(T x) { return floor_ilog2(x) + !is_power_of_two(x); }
+template <typename T>
+static auto greytobinary(T n) {
+    for (auto sh = sizeof(n)*8; (sh >>= 1); )
+        n ^= n >> sh;
+    return n;
+}
 #pragma GCC diagnostic pop
