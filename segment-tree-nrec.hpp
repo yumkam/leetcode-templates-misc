@@ -1,8 +1,14 @@
 #ifndef SEGMENT_TREE_NREC_HPP
 #define SEGMENT_TREE_NREC_HPP
+// requires: -std=c++17 (or greater) [std::gcd, std::as_const]
 #include <iterator>
 #include <limits>
 #include <numeric>
+#include <utility>
+#include <algorithm>
+#if __cplusplus > 201703L
+#include <bit>
+#endif
 // See https://codeforces.com/blog/entry/18051
 // Title: "Efficient and easy segment trees"
 // Author: Al.Cash <https://codeforces.com/profile/Al.Cash>
@@ -21,19 +27,27 @@ namespace SegmentTree {
     template <typename T>
         struct FunctionalGCD {
             static constexpr T neutral = 0;
-            T operator() (const T a, const T b) { return std::gcd(a, b); }
+            T operator() (const T a, const T b) const { return std::gcd(a, b); }
         };
+}
+namespace SegmentTree {
     namespace PointUpdateRangeQuery {
-        template<typename Container, typename Combine>
+        // combine(value_type a, value_type b) -> value_type
+        template<typename Container, typename Combine, typename ValueType = typename Container::value_type, typename SizeType = typename Container::size_type>
+            requires requires (Combine combine, ValueType &&a, ValueType &&b) {
+                { combine(a, b) } -> std::convertible_to<ValueType>;
+            }
             class SegTree {
-                // combine should be callable as `value_type combine(const value_type &, const value_type &)`
+                // combine should be callable as `combine(const value_type &, const value_type &) -> value_type`
                 // container should support `value_type &operator[](size_type)` and `size_type size() const`
-                typedef typename Container::size_type size_type;
-                typedef typename Container::size_type index_type;
-                typedef typename Container::value_type value_type;
+                public:
+                typedef SizeType size_type;
+                typedef SizeType index_type;
+                typedef ValueType value_type;
+                private:
                 Container t;
                 [[no_unique_address]]
-                Combine combine;
+                    Combine combine;
                 public:
                 SegTree(index_type size, Combine combine = Combine()) : t(size*2), combine{combine} {
                     if (combine(t[0], t[0]) != t[0])
@@ -56,20 +70,19 @@ namespace SegmentTree {
                 }
                 SegTree(const SegTree &) = default;
                 SegTree(SegTree &&) = default;
+                SegTree& operator=(const SegTree &) = default;
+                SegTree& operator=(SegTree &&) = default;
                 constexpr auto size () const noexcept { return t.size() >> 1; }
                 template<typename Source>
                     void init(Source src) {
-                        index_type n = size();
-                        for (index_type i = 0; i < n; i++)
-                            t[i + n] = src();
+                        std::generate_n(t.begin() + size(), size(), src);
                         init();
                     }
                 void reset(const value_type &initv) {
-                    index_type n = size();
                     if (combine(initv, initv) == initv)
-                        fill(t.begin(), t.end(), initv);
+                        std::fill(t.begin(), t.end(), initv);
                     else {
-                        fill(t.begin() + n, t.end(), initv);
+                        std::fill(t.begin() + size(), t.end(), initv);
                         init();
                     }
                 }
@@ -77,9 +90,10 @@ namespace SegmentTree {
                 void init() {
                     index_type n = size();
                     for (index_type i = n; i--; )
-                        t[i] = combine(t[i<<1], t[(i<<1)^1]);
+                        t[i] = combine(std::as_const(t)[i<<1], std::as_const(t)[(i<<1)^1]);
                 }
                 public:
+                // for commutative combine: combine(a, b) == combine(b, a)
                 void update(index_type pos, const value_type &val) {
                     index_type n = size();
                     pos += n;
@@ -96,20 +110,21 @@ namespace SegmentTree {
                 // this makes sense when combine is expensive, but update is not,
                 // e.g. for `multiset`
                 template <typename Updater>
-                void replace(index_type pos, Updater updater) {
-                    index_type n = size();
-                    pos += n;
-                    updater(t[pos]);
-                    while(pos > 1) {
-                        auto next = pos >> 1;
-                        updater(t[next]);
-                        pos = next;
+                    void replace(index_type pos, Updater updater) {
+                        index_type n = size();
+                        pos += n;
+                        updater(t[pos]);
+                        while(pos > 1) {
+                            auto next = pos >> 1;
+                            updater(t[next]);
+                            pos = next;
+                        }
                     }
-                }
                 const auto &query(index_type index) const {
                     index_type n = size();
                     return t[n + index];
                 }
+                // for commutative combine: combine(a, b) == combine(b, a)
                 auto query_halfopen(index_type l, index_type r, value_type res) const { // [ l; r )
                     index_type n = size();
                     for (l += n, r += n; l < r; l >>= 1, r >>= 1) {
@@ -120,99 +135,118 @@ namespace SegmentTree {
                     }
                     return res;
                 }
-                // search for first index in [l; r) so that pred(query_halfopen(l, r, res)) is true
+                // for commutative combine: combine(a, b) == combine(b, a)
+                // search for first index i in [l; r) so that pred(query_halfopen(l, i, res)) is true;
+                // updates res to be value of query_halfopen(l, i, res);
                 // expects tree partitioned in a way there exists index k in [l;r]
-                // such that for all i in [l;r) `pred(query_halfopen(l, i, res))` is same as `i >= k`
+                // such that for all i in [l;r) `pred(query_halfopen(l, i, res))` is same as `i >= k`;
                 template <typename Pred>
-                auto search_index_halfopen(index_type l, index_type r, value_type res, Pred pred) const { // [ l; r )
+                    auto search_prefix_index_halfopen(index_type l, index_type r, value_type &res, Pred pred) const { // [ l; r )
 #if 0
-                    if ((size() & (size() - 1)) == 0) {
-                        // O(log n)
-                        auto ll = l + n;
-                        auto rr = r + n;
-                        vector<pair<index_type, index_type>> stack;
-                        for (;;) {
-                            if (pred(res))
-                                break;
-                            if (ll >= rr) {
-                                if (stack.empty())
+                        if ((size() & (size() - 1)) == 0) {
+                            // O(log n)
+                            auto ll = l + n;
+                            auto rr = r + n;
+                            vector<pair<index_type, index_type>> stack;
+                            for (;;) {
+                                if (pred(res))
                                     break;
-                                tie(ll, rr) = stack.back();
-                                stack.pop_back();
-                                continue;
-                            }
-                            if ((ll & 1)) {
-                                res = combine(res, t[ll++]);
-                                continue;
-                            }
-                            if (ll < n) {
-                                auto tmp = combine(res, t[(ll<<1)]);
-                                if (pred(tmp)) {
+                                if (ll >= rr) {
+                                    if (stack.empty())
+                                        break;
+                                    tie(ll, rr) = stack.back();
+                                    stack.pop_back();
+                                    continue;
+                                }
+                                if ((ll & 1)) {
+                                    res = combine(res, t[ll++]);
+                                    continue;
+                                }
+                                if (ll < n) {
+                                    auto tmp = combine(res, t[(ll<<1)]);
+                                    if (pred(tmp)) {
 
+                                    }
                                 }
                             }
                         }
-                    }
 #endif
-                    // O(log^2 n)
-                    auto lo = l;
-                    auto hi = r;
-                    while(lo < hi) {
-                        auto mid = lo + (hi - lo)/2;
-                        auto midval = query_halfopen(lo, mid + 1, res);
-                        if (pred(midval))
-                            hi = mid;
-                        else {
-                            res = std::move(midval);
-                            lo = mid + 1;
+                        // O(log^2 n)
+                        auto lo = l;
+                        auto hi = r;
+                        while(lo < hi) {
+                            auto mid = lo + (hi - lo)/2;
+                            auto midval = query_halfopen(lo, mid + 1, res);
+                            if (pred(midval))
+                                hi = mid;
+                            else {
+                                res = std::move(midval);
+                                lo = mid + 1;
+                            }
                         }
+                        return lo;
                     }
-                    return lo;
-#endif
-                }
                 // extras
-                template <typename Result, typename Reduce>
-                Result query_reduce_halfopen(index_type l, index_type r, Result res, Reduce reduce) const { // [ l; r )
-                    index_type n = size();
-                    for (l += n, r += n; l < r; l >>= 1, r >>= 1) {
-                        if ((l & 1))
-                            res = reduce(res, t[l++]);
-                        if ((r & 1))
-                            res = reduce(res, t[--r]);
+                // search for first index i in [l; r) so that pred(query_halfopen(i, r, res)) is true;
+                // updates res to be value of query_halfopen(i, r, res);
+                // expects tree partitioned in a way there exists index k in [l;r]
+                // such that for all i in [l;r) `pred(query_halfopen(i, r, res))` is same as `i >= k`
+                template <typename Pred>
+                    auto search_suffix_index_halfopen(index_type l, index_type r, value_type &res, Pred pred) const { // [ l; r )
+#if 0
+                        if ((size() & (size() - 1)) == 0) {
+                            // TODO
+                            // O(log n)
+                        }
+#endif
+                        // O(log^2 n)
+                        auto lo = l;
+                        auto hi = r;
+                        while(lo < hi) {
+                            auto mid = lo + (hi - lo)/2;
+                            auto midval = query_halfopen(mid, hi, res);
+                            if (!pred(midval))
+                                lo = mid + 1;
+                            else {
+                                res = std::move(midval);
+                                hi = mid;
+                            }
+                        }
+                        return lo;
                     }
-                    return res;
-                }
+                ///////////////////////////////////////////////////////////////////////////////////////
+                template <typename Result, typename Reduce>
+                    Result query_reduce_halfopen(index_type l, index_type r, Result res, Reduce reduce) const { // [ l; r )
+                        index_type n = size();
+                        for (l += n, r += n; l < r; l >>= 1, r >>= 1) {
+                            if ((l & 1))
+                                res = reduce(res, t[l++]);
+                            if ((r & 1))
+                                res = reduce(res, t[--r]);
+                        }
+                        return res;
+                    }
                 /* e.g. ```
-                auto combine = [](const auto &a, const auto &b) {
-                        decltype(a) res;
+                    auto combine = [](const auto &a, const auto &b) {
+                        std::decay_t<decltype(a)> res;
+                        res.reserve(a.size() + b.size());
                         std::merge(a.begin(), a.end(), b.begin(), b.end(), std::back_inserter(res));
                         return res;
-                };
-                vector<int> src { 5, 1, 5, 3 1, 5 };
-                auto srcgen = [i = src.cbegin()]() mutable { return *i++; };
-                SegTree<vector<vector<int>>, decltype(combine)> st(src.size(), srcgen, combine);
-                auto query_min_greater = [](const auto &st, auto l, auto h, auto x) {
-                    auto reduce = [x](auto res, const auto &l) {
+                    };
+                    vector<int> src { 5, 1, 5, 3 1, 5 };
+                    auto srcgen = [i = src.cbegin()]() mutable { return { *i++ }; };
+                    SegTree<vector<vector<int>>, decltype(combine)> st(src.size(), srcgen, combine);
+                    auto query_min_greater = []<class ST>(const ST &st, typename ST::value_type::size_type l, typename ST::value_type::size_type h, typename ST::value_type::value_type x) {
+                        auto reduce = [x](auto res, const auto &l) {
                             auto lb = lower_bound(l.cbegin(), l.cend());
                             if (lb == l.cend()) return res;
                             return min(res, *lb);
+                        };
+                        return st.query_reduce_halfopen(l, h, std::numeric_limits<decltype(x)>::max(), reduce);
                     };
-                    return st.query_reduce_halfopen(1, 3, std::numeric_limits<decltype(x)>::max(), reduce);
-                };
-                std::cout << query_min_greater(1, 3, 2) << '\n';
-                ```
-                */
-                // for non-commutative combine
-                auto query_halfopen(index_type l, index_type r, value_type resl, value_type resr) const { // [ l; r )
-                    index_type n = size();
-                    for (l += n, r += n; l < r; l >>= 1, r >>= 1) {
-                        if ((l & 1))
-                            resl = combine(resl, t[l++]);
-                        if ((r & 1))
-                            resr = combine(t[--r], resr);
-                    }
-                    return combine(resl, resr);
-                }
+                    std::cout << query_min_greater(1, 3, 2) << '\n';
+                   ```
+                   */
                 auto query(index_type l, index_type r, value_type res) const { // [ l; r]
                     const index_type n = size();
                     for (l += n, r += n; l <= r; l >>= 1, r >>= 1) {
@@ -225,19 +259,6 @@ namespace SegmentTree {
                     }
                     return res;
                 }
-                // for non-commutative combine
-                auto query(index_type l, index_type r, value_type resl, value_type resr) const { // [ l; r]
-                    index_type n = size();
-                    for (l += n, r += n; l <= r; l >>= 1, r >>= 1) {
-                        if ((l & 1)) {
-                            resl = combine(resl, t[l]); ++l;
-                        }
-                        if (!(r & 1)) {
-                            resr = combine(t[r], resr); --r;
-                        }
-                    }
-                    return combine(resl, resr);
-                }
                 auto query(index_type l, index_type r) { // [ l; r]
                     return query_halfopen(l, r, query(r));
                 }
@@ -247,10 +268,10 @@ namespace SegmentTree {
                     size_type index;
                     reference(SegTree &f, size_type index) : f(f), index(index) {}
                     reference(const reference &) = default;
-                    operator value_type() const {
+                    operator const value_type&() const {
                         return f.query(index);
                     }
-                    reference &operator =(value_type v) {
+                    reference &operator =(const value_type& v) {
                         f.update(index, v);
                         return *this;
                     }
@@ -274,25 +295,231 @@ namespace SegmentTree {
                 reference back() { return (*this)[size() - 1]; }
                 auto front() const { return (*this)[0]; }
                 auto back() const { return (*this)[size() - 1]; }
-            };
+            }; // class SegTree
         template<typename Container>
-        using SegTreeSum = SegTree<Container, std::plus<typename Container::value_type>>;
+            using SegTreeSum = SegTree<Container, std::plus<typename Container::value_type>>;
         template<typename Container>
-        using SegTreeMin = SegTree<Container, FunctionalMin<typename Container::value_type>>;
+            using SegTreeMin = SegTree<Container, FunctionalMin<typename Container::value_type>>;
         template<typename Container>
-        using SegTreeMax = SegTree<Container, FunctionalMax<typename Container::value_type>>;
+            using SegTreeMax = SegTree<Container, FunctionalMax<typename Container::value_type>>;
     }
+}
+namespace SegmentTree {
+namespace NonCommutative {
+    namespace PointUpdateRangeQuery {
+        template<typename Container, typename Combine, typename ValueType = typename Container::value_type, typename SizeType = typename Container::size_type>
+            requires requires (Combine combine, ValueType &&a, ValueType &&b) {
+                { combine(a, b) } -> std::convertible_to<ValueType>;
+            }
+            class SegTree {
+                // combine should be callable as `combine(const value_type &, const value_type &) -> value_type`
+                // container should support `value_type &operator[](size_type)` and `size_type size() const`
+                public:
+                typedef SizeType size_type;
+                typedef SizeType index_type;
+                typedef ValueType value_type;
+                private:
+                Container t;
+                [[no_unique_address]]
+                    Combine combine;
+                public:
+                SegTree(index_type size, Combine combine = Combine()) : t(size*2), combine{combine} {
+                    if (combine(t[0], t[0]) != t[0])
+                        init();
+                }
+                template <typename Source>
+                    SegTree(index_type size, Source src, Combine combine = Combine()) : t(size*2), combine(combine) {
+                        init(src);
+                    }
+                SegTree(index_type size, const value_type &initv, Combine combine = Combine()) : t(size*2, initv), combine{combine} {
+                    if (combine(initv, initv) != initv)
+                        init();
+                }
+                template <typename Iterator>
+                    SegTree(Iterator begin, Iterator end, Combine combine = Combine()) : SegTree(std::distance(begin, end), [begin]() mutable { return *begin++; }, combine) {
+                    }
+                SegTree(const Container &c, Combine combine = Combine()) : SegTree(c.cbegin(), c.cend(), combine) {
+                }
+                SegTree(Container &&c, Combine combine = Combine()) : SegTree(c.size(), [begin = c.begin()]() mutable { return std::move(*begin++); }, combine) {
+                }
+                SegTree(const SegTree &) = default;
+                SegTree(SegTree &&) = default;
+                SegTree& operator=(const SegTree &) = default;
+                SegTree& operator=(SegTree &&) = default;
+                constexpr auto size () const noexcept { return t.size() >> 1; }
+                template<typename Source>
+                    void init(Source src) {
+                        std::generate_n(t.begin() + size(), size(), src);
+                        init();
+                    }
+                void reset(const value_type &initv) {
+                    if (combine(initv, initv) == initv)
+                        std::fill(t.begin(), t.end(), initv);
+                    else {
+                        std::fill(t.begin() + size(), t.end(), initv);
+                        init();
+                    }
+                }
+                private:
+                void init() {
+                    index_type n = size();
+                    for (index_type i = n; i--; )
+                        t[i] = combine(std::as_const(t)[i<<1], std::as_const(t)[(i<<1)^1]);
+                }
+                public:
+                // for non-commutative combine
+                void update(index_type pos, const value_type &val) {
+                    index_type n = size();
+                    pos += n;
+                    t[pos] = val;
+                    while(pos > 1) {
+                        auto next = pos >> 1;
+                        t[next] = combine(std::as_const(t)[pos & ~1], std::as_const(t)[pos | 1]);
+                        pos = next;
+                    }
+                }
+                // `updater(value_type &v)` is supposed to be able to change
+                // any result of combine(a_i,...combine(a_j^old, combine(...)))
+                // to result of combine(a_i,...combine(a_j^new, combine(...)))
+                // this makes sense when combine is expensive, but update is not,
+                // e.g. for `multiset`
+                template <typename Updater>
+                    void replace(index_type pos, Updater updater) {
+                        index_type n = size();
+                        pos += n;
+                        updater(t[pos]);
+                        while(pos > 1) {
+                            auto next = pos >> 1;
+                            updater(t[next]);
+                            pos = next;
+                        }
+                    }
+                const auto &query(index_type index) const {
+                    index_type n = size();
+                    return t[n + index];
+                }
+                // for non-commutative combine; rres must be neutral element: combine(a, rres) == a
+                template <typename Pred>
+                    auto search_prefix_index_halfopen(index_type l, index_type r, value_type &res, const value_type &rres, Pred pred) const { // [ l; r )
+                        // O(log^2 n)
+                        auto lo = l;
+                        auto hi = r;
+                        while(lo < hi) {
+                            auto mid = lo + (hi - lo)/2;
+                            auto midval = query_halfopen(lo, mid + 1, res, rres);
+                            if (pred(midval))
+                                hi = mid;
+                            else {
+                                res = std::move(midval);
+                                lo = mid + 1;
+                            }
+                        }
+                        return lo;
+                    }
+                // extras
+                // search for first index i in [l; r) so that pred(query_halfopen(i, r, resl, resr)) is true;
+                // updates resr to be value of query_halfopen(i, r, resr);
+                // expects tree partitioned in a way there exists index k in [l;r]
+                // such that for all i in [l;r) `pred(query_halfopen(i, r, resl, resr))` is same as `i >= k`
+                template <typename Pred>
+                    auto search_suffix_index_halfopen(index_type l, index_type r, const value_type &resl, value_type &resr, Pred pred) const { // [ l; r )
+#if 0
+                        if ((size() & (size() - 1)) == 0) {
+                            // TODO
+                            // O(log n)
+                        }
+#endif
+                        // O(log^2 n)
+                        auto lo = l;
+                        auto hi = r;
+                        while(lo < hi) {
+                            auto mid = lo + (hi - lo)/2;
+                            auto midval = query_halfopen(mid, hi, resl, resr);
+                            if (!pred(midval))
+                                lo = mid + 1;
+                            else {
+                                resr = std::move(midval);
+                                hi = mid;
+                            }
+                        }
+                        return lo;
+                    }
+                ///////////////////////////////////////////////////////////////////////////////////////
+                template <typename Result, typename ReduceL, typename ReduceR>
+                    std::pair<Result, Result> query_reduce_halfopen(index_type l, index_type r, Result resl, Result resr, ReduceL reduceL, ReduceR reduceR) const { // [ l; r )
+                        index_type n = size();
+                        for (l += n, r += n; l < r; l >>= 1, r >>= 1) {
+                            if ((l & 1))
+                                resl = reduceL(resl, t[l++]);
+                            if ((r & 1))
+                                resr = reduceR(t[--r], resr);
+                        }
+                        return { resl, resr } ;
+                    }
+                /* e.g. ```
+                    auto combine = [](const auto &a, const auto &b) {
+                        std::decay_t<decltype(a)> res;
+                        res.reserve(a.size() + b.size());
+                        std::merge(a.begin(), a.end(), b.begin(), b.end(), std::back_inserter(res));
+                        return res;
+                    };
+                    vector<int> src { 5, 1, 5, 3 1, 5 };
+                    auto srcgen = [i = src.cbegin()]() mutable { return { *i++ }; };
+                    SegTree<vector<vector<int>>, decltype(combine)> st(src.size(), srcgen, combine);
+                    auto query_min_greater = []<class ST>(const ST &st, typename ST::value_type::size_type l, typename ST::value_type::size_type h, typename ST::value_type::value_type x) {
+                        auto reduce = [x](auto res, const auto &l) {
+                            auto lb = lower_bound(l.cbegin(), l.cend());
+                            if (lb == l.cend()) return res;
+                            return min(res, *lb);
+                        };
+                        return st.query_reduce_halfopen(l, h, std::numeric_limits<decltype(x)>::max(), reduce);
+                    };
+                    std::cout << query_min_greater(1, 3, 2) << '\n';
+                   ```
+                   */
+                ///////////////////////////////////////////////////////////////////////////////////////
+                // for non-commutative combine
+                auto query_halfopen(index_type l, index_type r, value_type resl, value_type resr) const { // [ l; r )
+                    index_type n = size();
+                    for (l += n, r += n; l < r; l >>= 1, r >>= 1) {
+                        if ((l & 1))
+                            resl = combine(resl, t[l++]);
+                        if ((r & 1))
+                            resr = combine(t[--r], resr);
+                    }
+                    return combine(resl, resr);
+                }
+                // for non-commutative combine
+                auto query(index_type l, index_type r, value_type resl, value_type resr) const { // [ l; r]
+                    index_type n = size();
+                    for (l += n, r += n; l <= r; l >>= 1, r >>= 1) {
+                        if ((l & 1)) {
+                            resl = combine(resl, t[l]); ++l;
+                        }
+                        if (!(r & 1)) {
+                            resr = combine(t[r], resr); --r;
+                        }
+                    }
+                    return combine(resl, resr);
+                }
+            }; // class SegTree
+    } // namespace PointUpdateRangeQuery
+} // namespace NonCommutative
+}
+namespace SegmentTree {
     namespace PointUpdateRangeQuery2D {
         template<typename Container, typename Combine>
             class SegTree {
+                public:
                 typedef typename Container::size_type size_type;
                 typedef typename Container::size_type index_type;
                 typedef typename Container::value_type value_type;
+                private:
                 Container t;
                 size_type m_height;
                 size_type m_width;
                 [[no_unique_address]]
-                Combine combine;
+                    Combine combine;
                 public:
                 SegTree(index_type height, index_type width, Combine combine = Combine()) : t(width*height*2*2), m_height(height), m_width(width), combine{combine} {
                     if (combine(t[0], t[0]) != t[0])
@@ -414,23 +641,33 @@ namespace SegmentTree {
                     }
                     return res;
                 }
-            };
+            }; // class SegTree
         template<typename Container>
-        using SegTreeSum = SegTree<Container, std::plus<typename Container::value_type>>;
+            using SegTreeSum = SegTree<Container, std::plus<typename Container::value_type>>;
         template<typename Container>
-        using SegTreeMin = SegTree<Container, FunctionalMin<typename Container::value_type>>;
+            using SegTreeAnd = SegTree<Container, std::bit_and<typename Container::value_type>>;
         template<typename Container>
-        using SegTreeMax = SegTree<Container, FunctionalMax<typename Container::value_type>>;
-    }
+            using SegTreeOr = SegTree<Container, std::bit_or<typename Container::value_type>>;
+        template<typename Container>
+            using SegTreeXor = SegTree<Container, std::bit_xor<typename Container::value_type>>;
+        template<typename Container>
+            using SegTreeMin = SegTree<Container, FunctionalMin<typename Container::value_type>>;
+        template<typename Container>
+            using SegTreeMax = SegTree<Container, FunctionalMax<typename Container::value_type>>;
+    } // namespace PointUpdateRangeQuery2D
+}
+namespace SegmentTree {
     namespace RangeUpdatePointQuery {
-        template<typename Container, typename Combine, typename Container::value_type Init>
+        template<typename Container, typename Combine, typename Container::value_type Init = Combine::neutral>
             class SegTree {
+                public:
                 typedef typename Container::size_type size_type;
                 typedef typename Container::size_type index_type;
                 typedef typename Container::value_type value_type;
+                private:
                 Container t;
                 [[no_unique_address]]
-                Combine combine;
+                    Combine combine;
                 public:
                 SegTree(index_type size, Combine combine = Combine()) : t(size*2, Init), combine{combine} {
                 }
@@ -453,9 +690,7 @@ namespace SegmentTree {
                 private:
                 template<typename Source>
                     void init(Source src) {
-                        index_type n = size();
-                        for (index_type i = 0; i < n; i++)
-                            t[i + n] = src();
+                        std::generate_n(t.begin() + size(), size(), src);
                         init();
                     }
                 void init() {}
@@ -509,14 +744,22 @@ namespace SegmentTree {
                 auto operator [](size_type index) const {
                     return query(index);
                 }
-            };
+            }; // class SegTree
         template<typename Container>
-        using SegTreeSum = SegTree<Container, std::plus<typename Container::value_type>, 0>;
+            using SegTreeSum = SegTree<Container, std::plus<typename Container::value_type>, 0>;
         template<typename Container>
-        using SegTreeMin = SegTree<Container, FunctionalMin<typename Container::value_type>, FunctionalMin<typename Container::value_type>::neutral>;
+            using SegTreeAnd = SegTree<Container, std::bit_and<typename Container::value_type>, ~(typename Container::value_type)0>;
         template<typename Container>
-        using SegTreeMax = SegTree<Container, FunctionalMax<typename Container::value_type>, FunctionalMax<typename Container::value_type>::neutral>;
-    }
+            using SegTreeOr = SegTree<Container, std::bit_or<typename Container::value_type>, 0>;
+        template<typename Container>
+            using SegTreeXor = SegTree<Container, std::bit_xor<typename Container::value_type>, 0>;
+        template<typename Container, typename Comp = FunctionalMin<typename Container::value_type>>
+            using SegTreeMin = SegTree<Container, Comp, Comp::neutral>;
+        template<typename Container, typename Comp = FunctionalMax<typename Container::value_type>>
+            using SegTreeMax = SegTree<Container, Comp, Comp::neutral>;
+    } // namespace RangeUpdatePointQuery
+}
+namespace SegmentTree {
     namespace RangeUpdateRangeQueryLazy {
         template<typename Container, typename CombineU, typename CombineQ, typename Container::value_type Init>
             class SegTree {
@@ -524,19 +767,25 @@ namespace SegmentTree {
                 // combineU(combineQ(a, b), c) == combineQ(combineU(a, c), combineU(b, c))
                 // combineU(Init, a) == Init
                 // combineQ(Init, a) == Init
+                public:
                 typedef typename Container::size_type size_type;
                 typedef typename Container::size_type index_type;
                 typedef typename Container::value_type value_type;
+                private:
                 Container t;
                 Container d;
                 [[no_unique_address]]
-                CombineU combineU;
+                    CombineU combineU;
                 [[no_unique_address]]
-                CombineQ combineQ;
+                    CombineQ combineQ;
                 index_type h;
+#if __cplusplus > 201703L
+                static unsigned ilog2(auto i) { return sizeof(i)*8 - std::countr_zero(i); }
+#else
                 static unsigned ilog2(unsigned i) { return sizeof(i)*8 - __builtin_clz(i); }
                 static unsigned ilog2(unsigned long i) { return sizeof(i)*8 - __builtin_clzl(i); }
                 static unsigned ilog2(unsigned long long i) { return sizeof(i)*8 - __builtin_clzll(i); }
+#endif
                 public:
                 SegTree(index_type size, CombineU combineU = CombineU(), CombineQ combineQ = CombineQ()) : t(size*2, Init), d(size, Init), combineU{combineU}, combineQ{combineQ}, h{ilog2(size)} {
                     if (combineQ(Init, Init) != Init)
@@ -561,17 +810,15 @@ namespace SegmentTree {
                 SegTree(SegTree &&) = default;
                 template<typename Source>
                     void init(Source src) {
-                        index_type n = size();
-                        for (index_type i = 0; i < n; i++)
-                            t[i + n] = src();
+                        std::generate_n(t.begin() + size(), size(), src);
                         init();
                     }
                 void reset(const value_type &initv) {
                     index_type n = size();
                     if (combineQ(initv, initv) == initv)
-                        fill(t.begin(), t.end(), initv);
+                        std::fill(t.begin(), t.end(), initv);
                     else {
-                        fill(t.begin() + n, t.end(), initv);
+                        std::fill(t.begin() + n, t.end(), initv);
                         init();
                     }
                 }
@@ -645,12 +892,12 @@ namespace SegmentTree {
                 auto operator [](size_type index) const {
                     return query(index);
                 }
-            };
+            }; // class SegTree
         //template<typename Container>
         //using SegTreeMinInc = SegTree<Container, FunctionalMin<typename Container::value_type>, std::plus<typename Container::value_type>, 0>;
         //template<typename Container>
         //using SegTreeMaxInc = SegTree<Container, FunctionalMax<typename Container::value_type>, std::plus<typename Container::value_type>, 0>;
-    }
+    } // namespace RangeUpdateRangeQueryLazy
 };
 #endif // SEGMENT_TREE_NREC_HPP
 // vim: sw=4 et
