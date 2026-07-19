@@ -49,7 +49,7 @@ class FenwickGeneric {
     // return least significant bit of i
     static size_type LSB(size_type i) {
         return i & -i;
-    } 
+    }
     void init() { // time = O(n)
         for (size_type i = 1; i < A.size(); ++i) {
             auto j = i + LSB(i);
@@ -212,7 +212,6 @@ class FenwickGeneric {
                 jpow2 = npow;
             return upper_bound(key, j, jpow2, comp);
         }
-        
 
     template <typename Key, typename Comp = std::less<Key>>
         size_type upper_bound(const Key &key, Comp comp = Comp()) const {
