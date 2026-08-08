@@ -1,6 +1,7 @@
 #include <vector>
 #include <numeric>
 #include <cassert>
+#include <span>
 template <typename Index, bool Bidir = false>
 struct Graph {
     std::vector<Index> epos;
@@ -29,14 +30,16 @@ struct Graph {
     Index size() const noexcept {
         return epos.size() - 1;
     }
+    auto operator[](Index v) const {
+        return std::span { adj.cbegin() + epos[v], adj.cbegin() + epos[v + 1] };
+    }
 };
 template <typename Index = unsigned>
-static void dfs(Index u, Index p, const auto& g, auto&& init, auto&& combine, auto&& finish) {
+static void dfs_tree(Index u, Index p, const auto& g, auto&& init, auto&& combine, auto&& finish) {
     auto state = init(u);
-    for (Index j = g.epos[u], l = g.epos[u + 1]; j != l; ++j) {
-        auto v = g.adj[u];
+    for (auto v: g[u]) {
         if (v == p) continue;
-        auto vres = dfs(v, u, adj, init, combine, finish);
+        auto vres = dfs_tree(v, u, g, init, combine, finish);
         combine(state, v, vres);
     }
     return finish(state);
