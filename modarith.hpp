@@ -137,17 +137,20 @@ namespace modarith {
         if (a < 0) a += static_cast<int>(modulo);
         return a;
     }
-    static constexpr unsigned reducemod(uint64_t A) {
-#if 0
-        constexpr auto pow32 = powmod(2, 32);
-        static_assert(std::numeric_limits<uint32_t>::max() <= (std::numeric_limits<uint64_t>::max() - std::numeric_limits<uint32_t>::max())/pow32);
-        return (static_cast<uint32_t>(A) + static_cast<uint32_t>(A>>32)*static_cast<uint64_t>(pow32)) % modulo;
-#else
+    static constexpr unsigned reducemod(unsigned long A) {
         if (__builtin_constant_p(A < modulo) && A < modulo) return A;
         return A % modulo;
-#endif
     }
-    static constexpr unsigned reducemod(int64_t A) {
+    static constexpr unsigned reducemod(unsigned long long A) {
+        if (__builtin_constant_p(A < modulo) && A < modulo) return A;
+        return A % modulo;
+    }
+    static constexpr unsigned reducemod(long A) {
+        int a = A % (int)modulo;
+        if (a < 0) a += (int)modulo;
+        return a;
+    }
+    static constexpr unsigned reducemod(long long A) {
         int a = A % (int)modulo;
         if (a < 0) a += (int)modulo;
         return a;
