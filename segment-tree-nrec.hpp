@@ -120,6 +120,11 @@ namespace SegmentTree {
                             pos = next;
                         }
                     }
+                // same restrictions as with replace
+                // work as shortcut for "increment value" for Sum, "update with greater value" for Max, "update with lower value" for Min; does NOT work for Gcd and similar
+                void adjust(index_type pos, const value_type& val) {
+                    replace(pos, [&combine=combine, &val](value_type& cur) { cur = combine(cur, val); });
+                }
                 const auto &query(index_type index) const {
                     index_type n = size();
                     return t[n + index];
@@ -505,7 +510,7 @@ namespace NonCommutative {
             }; // class SegTree
     } // namespace PointUpdateRangeQuery
 } // namespace NonCommutative
-}
+} // namespace SegmentTree
 namespace SegmentTree {
     namespace PointUpdateRangeQuery2D {
         template<typename Container, typename Combine>
