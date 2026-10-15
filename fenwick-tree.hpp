@@ -287,22 +287,22 @@ namespace V1 {
             FenwickTreeRangeUpdateRangeQuery(FenwickTreeRangeUpdateRangeQuery &&) = default;
             auto size() const { return t1.size(); }
             // adds val to nums[l] ... nums[r]
-            void add_range(size_type l, size_t r, const value_type&val) {
+            void add_range(size_type l, size_type r, const value_type&val) {
                 const auto n = size();
                 t1.add(l, val);
                 t2.add(l, val*static_cast<value_type>(l) - val);
-                if (r + 1 != size) {
+                if (r + 1 != n) {
                     t1.add(r + 1, -val);
                     t2.add(r + 1, -val*static_cast<value_type>(r));
                 }
             }
             // return 
-            value_type prefix_sum(size_t i) {
+            value_type prefix_sum(size_type i) {
                 return t1.prefix_sum(i)*static_cast<value_type>(i) - t2.prefix_sum(i);
             }
             // Returns sum of nums[i + 1] to nums[j].
             // Same as prefix_sum(j) - prefix_sum(i), but a bit faster
-            value_type range_sum(size_t l, size_t r) {
+            value_type range_sum(size_type l, size_type r) {
                 return t1.sum(r)*static_cast<value_type>(r) - t1.prefix_sum(l)*static_cast<value_type>(l) - t2.range_sum(l, r);
             }
         };
@@ -326,10 +326,10 @@ namespace V2 {
             FenwickTreeRangeUpdateRangeQuery(FenwickTreeRangeUpdateRangeQuery &&) = default;
             auto size() const { return t.size(); }
             // adds val to nums[l] ... nums[r]
-            void add_range(size_type l, size_t r, const value_type&val) {
+            void add_range(size_type l, size_type r, const value_type&val) {
                 const auto n = size();
                 t.add(l, vpair{val, val*static_cast<value_type>(l) - val});
-                if (r + 1 != size)
+                if (r + 1 != n)
                     t.add(r + 1, vpair {-val, -val*static_cast<value_type>(r)});
             }
             value_type prefix_sum(size_type i) {
