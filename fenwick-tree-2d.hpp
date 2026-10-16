@@ -77,7 +77,6 @@ class FenwickTree2D {
 #endif
 
     // Returns the sum of the first i elements (indices 0 to i)
-    // Equivalent to range_sum(0, i)
     T prefix_sum(size_type x, size_type y) const {
         // assert(i < A.size());
         T sum = A[0][0];
@@ -118,7 +117,7 @@ class FenwickTree2D {
 	}
     }
 
-    // returns sum of rectangle (xi + 1, xi + 1) to (xj, yj)
+    // returns sum of rectangle (xi + 1, yi + 1) to (xj, yj)
     T range_sum(size_type xi, size_type yi, size_type xj, size_type yj) const {
 #if 0
         T sum = 0;
