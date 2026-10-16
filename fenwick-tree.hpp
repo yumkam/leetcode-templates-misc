@@ -276,7 +276,7 @@ class FenwickTree {
 namespace V1 {
     template <typename T, typename V = std::vector<T>>
         class FenwickTreeRangeUpdateRangeQuery {
-            // T is expected to support 'a += b', 'a -= b', 'a + b', 'a - b', 'a * b', '-a', a cast from size_type
+            // T is expected to support 'a += b', 'a + b', 'a - b', 'a * b', '-a', a cast from size_type
             FenwickTree<T, V> t1;
             FenwickTree<T, V> t2;
             public:
@@ -286,6 +286,7 @@ namespace V1 {
             FenwickTreeRangeUpdateRangeQuery(const FenwickTreeRangeUpdateRangeQuery &) = default;
             FenwickTreeRangeUpdateRangeQuery(FenwickTreeRangeUpdateRangeQuery &&) = default;
             auto size() const { return t1.size(); }
+            auto empty() const { return t1.empty(); }
             // adds val to nums[l] ... nums[r]
             void add_range(size_type l, size_type r, const value_type&val) {
                 const auto n = size();
@@ -304,6 +305,10 @@ namespace V1 {
             // Same as prefix_sum(j) - prefix_sum(i), but a bit faster
             value_type range_sum(size_type l, size_type r) {
                 return t1.sum(r)*static_cast<value_type>(r) - t1.prefix_sum(l)*static_cast<value_type>(l) - t2.range_sum(l, r);
+            }
+            void push_back(const value_type& val) {
+                t2.push_back(val*static_cast<value_type>(size()) - val);
+                t1.push_back(val);
             }
         };
 } // V1
