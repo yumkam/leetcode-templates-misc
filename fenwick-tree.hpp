@@ -308,11 +308,11 @@ namespace V1 {
         };
 } // V1
 namespace V2 {
-    template <typename T>
+    template <typename T, typename U = T>
         class FenwickTreeRangeUpdateRangeQuery {
-            // T is expected to support 'a += b', 'a -= b', 'a + b', 'a - b', 'a * b', '-a', a cast from size_type
+            // T is expected to support 'a += b', 'a + b', 'a - b', 'a * b', '-a', a cast from size_type
             struct vpair {
-                T v1 {};
+                U v1 {};
                 T v2 {};
                 constexpr void operator += (const vpair& other) { v1 += other.v1; v2 += other.v2; }
                 constexpr bool operator == (const vpair& other) const = default;
@@ -325,8 +325,9 @@ namespace V2 {
             FenwickTreeRangeUpdateRangeQuery(const FenwickTreeRangeUpdateRangeQuery &) = default;
             FenwickTreeRangeUpdateRangeQuery(FenwickTreeRangeUpdateRangeQuery &&) = default;
             auto size() const { return t.size(); }
+            auto empty() const { return t.empty(); }
             // adds val to nums[l] ... nums[r]
-            void add_range(size_type l, size_type r, const value_type&val) {
+            void add_range(size_type l, size_type r, const U& val) {
                 const auto n = size();
                 t.add(l, vpair{val, val*static_cast<value_type>(l) - val});
                 if (r + 1 != n)
@@ -339,7 +340,7 @@ namespace V2 {
             value_type range_sum(size_type l, size_type r) {
                 return prefix_sum(r) - prefix_sum(l);
             }
-            void push_back(const value_type &val) {
+            void push_back(const U& val) {
                 t.push_back(vpair {val, val*static_cast<value_type>(size()) - val });
             }
         };
