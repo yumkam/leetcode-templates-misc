@@ -74,7 +74,6 @@ class FenwickTree {
     }
 
     // Returns the sum of the first i elements (indices 0 to i)
-    // Equivalent to range_sum(0, i)
     T prefix_sum(size_type i) const {
         // assert(i < A.size());
         T sum = A[0];
