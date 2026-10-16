@@ -5,7 +5,7 @@ template <typename T, typename V = std::vector<T>>
 class FenwickTree {
     // One-based Fenwick tree with a twist (A[0] saves nums[0])
     V A;
-    // for all operations T must support 'a += b'
+    // for all operations T must support 'a += b', 'a == b' and default value must be neutral
     // for get(), set(), range_sum(), cast to V, T must support 'a -= b'
     // for range_query(), lower_bound(), T must support 'a -= b' and 'a < b'
     public:
@@ -97,7 +97,7 @@ class FenwickTree {
     // Returns sum of nums[i + 1] to nums[j].
     // Same as prefix_sum(j) - prefix_sum(i), but a bit faster
     T range_sum(size_type i, size_type j) const {
-        T sum = 0;
+        T sum {};
         // assert(0 < i);
         // assert(i < j);
         // assert(j < A.size());
@@ -140,7 +140,7 @@ class FenwickTree {
     }
 
     private:
-    void adjust_size(size_t osize) {
+    void adjust_size(size_type osize) {
         auto i = osize <= 1 ? 1 : osize - 1;
         while(auto npow = i - LSB(i))
             i = npow;
@@ -312,10 +312,10 @@ namespace V2 {
         class FenwickTreeRangeUpdateRangeQuery {
             // T is expected to support 'a += b', 'a -= b', 'a + b', 'a - b', 'a * b', '-a', a cast from size_type
             struct vpair {
-                T v1;
-                T v2;
-                void operator += (const T& other) { v1 += other.v1; v2 += other.v2; }
-                void operator -= (const T& other) { v1 -= other.v1; v2 -= other.v2; }
+                T v1 {};
+                T v2 {};
+                constexpr void operator += (const vpair& other) { v1 += other.v1; v2 += other.v2; }
+                constexpr bool operator == (const vpair& other) const = default;
             };
             FenwickTree<vpair> t;
             public:
