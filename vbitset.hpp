@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <utility>
 #include <cassert>
-// combined bitset and vector, for semi-sparsed set of reasonably small integers;
+// combined bitset and vector, for semi-sparse set of reasonably small integers;
 // bitset efficiently answers to "number is present",
 // vector efficiently enumerates numbers;
 class vbitset {
@@ -74,7 +74,7 @@ class vbitset {
     void sort(auto pred = std::less<>()) { // O(size() * log size())
         sort(vals.begin(), vals.end(), pred);
     }
-    void reconstruct() { // O(bits.size())
+    void reconstruct() { // O(max())
         vals.clear();
         for (unsigned i = 0; i < bits.size(); ++i)
             if (bits[i])
