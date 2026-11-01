@@ -1,51 +1,8 @@
 // Public domain
 #include <bits/stdc++.h>
 #include "heap.hpp"
+#include "wgraph.hpp"
 using namespace std;
-template <typename Weight, typename Index>
-struct WGraph {
-    using index_type = Index;
-    using weight_type = Weight;
-    std::vector<Index> epos;
-    std::vector<std::pair<Weight, Index>> adj;
-    // Convert graph, O(|V|+|E|)
-    template <typename E, typename C = std::identity>
-    WGraph(Index n, const E& edges, C&& get = std::identity(), bool bidir = false)
-        : epos(n + 1)
-    {
-        for (auto& e: edges) {
-            auto [w, u, v] = get(e);
-            ++epos[u];
-            if (bidir)
-                ++epos[v];
-        }
-        std::inclusive_scan(epos.begin(), epos.end(), epos.begin());
-        assert(epos.back() == (edges.size()<<bidir));
-        adj.resize(epos.back());
-        for (auto& e: edges) {
-            auto [w, u, v] = get(e);
-            adj[--epos[u]] = std::make_pair(w, v);
-            if (bidir)
-                adj[--epos[v]] = std::make_pair(w, u);
-        }
-    }
-    WGraph(Index n, const std::vector<vector<int>>& el, bool bidir = false)
-        : WGraph(n, el, [](const auto& e) { return tuple { e[2], e[0], e[1] }; }, bidir)
-        {}
-    Index size() const noexcept {
-        return epos.size() - 1;
-    }
-    friend ostream& operator<<(ostream& os, const WGraph& g) {
-        os << "graph = [";
-        for (unsigned i = 0; i < g.size(); ++i) {
-            os << i << " ->";
-            for (unsigned j = g.epos[i], l = g.epos[i + 1]; j < l; ++j)
-                os << ' ' << g.adj[j].first <<'/' << g.adj[j].second;
-            os << ";\n";
-        }
-        return os << "]\n";
-    }
-};
 template <typename Weight, typename Index>
 struct sssp_dijkstra {
     std::vector<Index> q;
@@ -94,8 +51,7 @@ struct sssp_dijkstra {
             idx2heap[q.front()] = 0;
             q.pop_back();
             binaryHeap::siftDown((Index)q.size(), (Index)0, cmp, swapit);
-            for (Index j = g.epos[u], l = g.epos[u + 1]; j != l; ++j) {
-                auto [w, v] = g.adj[j];
+            for (auto [w, v]: g[u]) {
                 w += dist;
                 if (!comp(w, mindist[v]))
                     continue;
@@ -143,8 +99,7 @@ struct sssp_dijkstra {
             idx2heap[q.front()] = 0;
             q.pop_back();
             binaryHeap::siftDown((Index)q.size(), (Index)0, cmp, swapit);
-            for (Index j = g.epos[u], l = g.epos[u + 1]; j != l; ++j) {
-                auto [w, v] = g.adj[j];
+            for (auto [w, v]: g[u]) {
                 w += dist;
                 if (!comp(w, mindist[v].second))
                     continue;
@@ -214,10 +169,10 @@ int main() {
         {-3, z, y}, {-7, z, x},
     }};
 #else
-    size_t n = 1000;
+    size_t n = 26;
     vector<tuple<int, unsigned,unsigned>> edges(n - 1);
     for (unsigned e = 0; e < edges.size(); ++e)
-        edges[e] = make_tuple(-2'000'000,e%n,(e+1)%n);
+        edges[e] = make_tuple(+2'000'000,e%n,(e+1)%n);
     constexpr int minw = 0;
     constexpr int maxw = +1'000'000'000;
 #endif
